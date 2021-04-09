@@ -1,27 +1,27 @@
-(* ast is returned from the parser *)
+type 'a var = Var of 'a
 
-type astVar = AVar of string
-type astType =
-  | AYVar of astVar
-  | AYFun of astType * astType
-type astDecl = ADecl of astVar * astType
-type astCtx = ACtx of astDecl list
+type 'a typ = YVar of 'a var | YFun of 'a typ * 'a typ
+
+type 'a decl = Decl of 'a var * 'a typ
+type 'a ctx = Ctx of ('a decl) list
 
 let ctxCons d c =
   match c with
-  | ACtx(l) -> ACtx(d :: l)
+  | Ctx(l) -> Ctx(d :: l)
 
-type astTerm =
-  | ATVar of astVar
-  | ATAbs of astDecl * astTerm
-  | ATApp of astTerm * astTerm
+type 'a term =
+  | TVar of 'a var
+  | TAbs of 'a decl * 'a term
+  | TApp of 'a term * 'a term
 
-type astStm = AStm of astTerm * astType
-type astJud = AJud of astCtx * astStm
+type 'a stm = Stm of 'a term * 'a typ
+type 'a jud = Jud of 'a ctx * 'a stm
+
+type strJud = string jud
 
 let eval a =
   match a with
-  | AJud(_, _) -> "Yes!"
+  | Jud(_, _) -> "Yes!"
 
 (*
   | ATVar of string
