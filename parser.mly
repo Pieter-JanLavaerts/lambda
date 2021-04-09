@@ -1,26 +1,40 @@
 %token LAMBDA LPAREN RPAREN
 %token <string> VAR
+%token DERRIVES
 %token ARROW COLON
-%token DOT
+%token DOT COMMA
 %token EOL
 
-%start <Term.astStm> main
+%start <Term.astJud> main
 %{open Term %}
 
 %%
 
 main:
-  | s = stm; EOL { s }
+  | j = judgement; EOL { j }
 
-stm:
-  | t = term; COLON; ty = typ {AStm(t, ty)}
+judgement:
+  | c = context; DERRIVES; s = statement { AJud(c, s) }
 
-typ:
-  | v = VAR { ATVar(v) }
-  | LPAREN; t1 = typ; ARROW; t2 = typ; RPAREN { ATFun(t1, t2) }
+statement:
+  | t = term; COLON; ty = typ { AStm(t, ty) }
 
 term:
-  | v = VAR { AVar(v) }
-  | LPAREN; a1 = term; a2 = term; RPAREN { AApp(a1, a2) }
-  | LPAREN LAMBDA; v = VAR; DOT; a = term; RPAREN { AAbs(v, a) }
+  | v = var { ATVar(v) }
+  | LPAREN; LAMBDA;  d = decl; DOT; t = term; RPAREN { ATAbs(d, t) }
+  | LPAREN; t1 = term; t2 = term; RPAREN { ATApp(t1, t2) }
 
+context:
+  | d = decl; { ACtx([d]) }
+  | d = decl; COMMA; c = context { ctxCons d c }
+
+decl:
+  | v = var; COLON; ty = typ { ADecl(v, ty) }
+
+typ:
+  | v = var { AYVar(v) }
+  | LPAREN; ty1 = typ; ARROW; ty2 = typ; RPAREN { AYFun(ty1, ty2) }
+
+var:
+  | v = VAR { AVar(v) }
+					 

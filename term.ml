@@ -1,15 +1,39 @@
 (* ast is returned from the parser *)
-type astTerm =
-  | AVar of string
-  | AAbs of string * astTerm
-  | AApp of astTerm * astTerm
 
+type astVar = AVar of string
 type astType =
+  | AYVar of astVar
+  | AYFun of astType * astType
+type astDecl = ADecl of astVar * astType
+type astCtx = ACtx of astDecl list
+
+let ctxCons d c =
+  match c with
+  | ACtx(l) -> ACtx(d :: l)
+
+type astTerm =
+  | ATVar of astVar
+  | ATAbs of astDecl * astTerm
+  | ATApp of astTerm * astTerm
+
+type astStm = AStm of astTerm * astType
+type astJud = AJud of astCtx * astStm
+
+let eval a =
+  match a with
+  | AJud(_, _) -> "Yes!"
+
+(*
   | ATVar of string
   | ATFun of astType * astType
 
-type astStm = AStm of astTerm * astType
+  | AVar of string
+  | AAbs of string * astTerm
+  | AApp of astTerm * astTerm
+*)
 
+
+(*
 let getTerm stm =
   match stm with AStm(t, _) -> t;
 
@@ -131,14 +155,4 @@ let rec beta t =
   with Done -> t
 
 let eval = beta
-
-let a =
-  AApp(
-    AApp(
-      AAbs("f", AAbs("x", AApp(AVar("f"), AApp(AVar("f"), AVar("x"))))), (* 2 *)
-
-      AAbs("x", AApp(AVar("x"), AVar("x"))) (* (\x.x x) *)
-    ),
-    AVar("x")
-  )
-      
+*)

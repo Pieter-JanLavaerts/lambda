@@ -4,10 +4,8 @@ let process (line : string) =
   let linebuf = Lexing.from_string line in
   try
     (* Run the parser on this line of input. *)
-    let AStm(res, _) = (Parser.main Lexer.token linebuf) in
-    let term = ast2term res in
-    let vars = freevars res in
-    Printf.printf "=> %s\n%!" (term2string (eval term) vars)
+    let res = (Parser.main Lexer.token linebuf) in
+    Printf.printf "=> %s\n%!" (eval res)
   with
   | Lexer.Error msg ->
       Printf.fprintf stderr "%s%!" msg

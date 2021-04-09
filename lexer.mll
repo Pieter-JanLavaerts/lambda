@@ -31,6 +31,8 @@ and token = parse
     { EOL }
 | "lambda"
     { LAMBDA }
+| "|>"
+    { DERRIVES }
 | "->"
     { ARROW }
 | ":"
@@ -41,6 +43,8 @@ and token = parse
     { RPAREN }
 | [ '.' ]
     { DOT }
+| [ ',' ]
+    { COMMA }
 | ['A'-'Z' 'a'-'z' '_']
   ['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
     { VAR (Lexing.lexeme lexbuf) }
