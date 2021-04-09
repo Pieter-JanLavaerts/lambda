@@ -23,9 +23,51 @@ type 'a jud = Jud of ctx * 'a stm
 type strJud = string jud (* used for main type declaration in parser *)
 
 (* to string *)
+
+let greek s =
+  match s with
+  | "a" -> "α"
+  | "b" -> "β"
+  | "g" -> "γ"
+  | "G" -> "Γ"
+  | "d" -> "δ"
+  | "D" -> "Δ"
+  | "e" -> "ϵ"
+  | "E" -> "E"
+  | "z" -> "ζ"
+  | "Z" -> "Z"
+  | "h" -> "η"
+  | "H" -> "H"
+  | "o" -> "θ"
+  | "O" -> "Θ"
+  | "i" -> "ι"
+  | "k" -> "κ"
+  | "L" -> "Λ"
+  | "m" -> "μ"
+  | "M" -> "M"
+  | "v" -> "ν"
+  | "x" -> "ξ"
+  | "X" -> "Ξ"
+  | "p" -> "π"
+  | "P" -> "Π"
+  | "r" -> "ρ"
+  | "s" -> "σ"
+  | "S" -> "Σ"
+  | "t" -> "τ"
+  | "T" -> "T"
+  | "u" -> "υ"
+  | "U" -> "ϒ"
+  | "f" -> "ϕ"
+  | "F" -> "Φ"
+  | "c" -> "ψ"
+  | "C" -> "Ψ"
+  | "w" -> "ω"
+  | "W" -> "Ω"
+  | _ -> s
+
 let rec tyToString(t : typ) : string =
   match t with
-  | YVar(ty) -> ty
+  | YVar(ty) -> greek ty
   | YFun(ty1, ty2) -> "(" ^ tyToString(ty1) ^ " -> " ^ tyToString(ty2) ^ ")"
 let dToString (Decl(v, ty) : decl) = v ^ " : " ^ tyToString(ty)
 let rec cToString (Ctx(l) : ctx) =
@@ -38,7 +80,7 @@ let rec tToString (t : 'a term) =
 (*| TVar(v) -> v*)
 (*| TVar(v) -> string_of_int v*)
   | TVar(v) -> v
-  | TAbs(d, t) -> "(lambda " ^ dToString d ^ " . " ^ (tToString t) ^ ")"
+  | TAbs(d, t) -> "(λ " ^ dToString d ^ " . " ^ (tToString t) ^ ")"
   | TApp(t1, t2) -> "(" ^ tToString t1 ^ " " ^ tToString t2 ^ ")"
 let sToString (Stm(t, ty) : 'a stm) : string = tToString t ^ " : " ^ tyToString ty
 let jToString (Jud(c, s) : 'a jud) : string = cToString c ^ " |> " ^ sToString s
