@@ -1,0 +1,8 @@
+_build/*
+dune-project
+*~
+\#*\#
+*.elc
+auto-save-list
+tramp
+.\#*
