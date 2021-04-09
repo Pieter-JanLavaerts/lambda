@@ -69,10 +69,10 @@ let pickname ctx name =
 let rec term2string trm ctx =
   match trm with
   | TVar(n, x) ->
-    if ctxlen ctx = n then
+    if n <= ctxlen ctx then
       (List.nth ctx x)
     else
-      Printf.sprintf "[bad index %d > %d]" n (ctxlen ctx)
+      Printf.sprintf "[bad index %d != %d]" n (ctxlen ctx)
   | TAbs(name, t) ->
     let (ctx', name') = pickname ctx name in
     "(lambda " ^ name' ^ " . " ^ term2string t ctx' ^ ")"
@@ -100,28 +100,45 @@ let rec subs j s t =
   | TApp(t1, t2) ->
     TApp(subs j s t1 , subs j s t2)
 
-let isval t =
-  match t with
-  | TAbs(_, _) -> true
-  | _ -> false
-
 let substop s t =
   shift (-1) (subs 0 (shift 1 s) t)
 
 exception Done
-let rec eval1 t =
+let rec beta1 t =
+  let isval t =
+    match t with
+    | TApp(_, _) -> false
+    | _ -> true
+  in
+
   match t with
-  | TApp(TAbs(_, abs), t2) when isval t2 ->
-    substop t2 abs
-  | TApp(t1, t2) when isval t1 ->
-    let t2' = eval1 t2 in
-    TApp(t1, t2')
-  | TApp(t1, t2) ->
-    let t1' = eval1 t1 in
-    TApp(t1', t2)
+  | TApp(TAbs(_,m),n) when isval n ->
+      substop n m
+
+  | TApp(v1,t2) when isval v1 ->
+      let t2' = beta1 t2 in
+      TApp(v1, t2')
+
+  | TApp(t1,t2) ->
+      let t1' = beta1 t1 in
+      TApp(t1', t2)
+
   | _ -> raise Done
 
-let rec eval t =
-  try let t' = eval1 t in
-    eval t'
+let rec beta t =
+  try let t' = beta1 t in
+    beta t'
   with Done -> t
+
+let eval = beta
+
+let a =
+  AApp(
+    AApp(
+      AAbs("f", AAbs("x", AApp(AVar("f"), AApp(AVar("f"), AVar("x"))))), (* 2 *)
+
+      AAbs("x", AApp(AVar("x"), AVar("x"))) (* (\x.x x) *)
+    ),
+    AVar("x")
+  )
+      
