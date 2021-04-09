@@ -5,7 +5,7 @@ let process (line : string) =
   try
     (* Run the parser on this line of input. *)
     let res = (Parser.main Lexer.token linebuf) in
-    Printf.printf "=> %s\n%!" (eval res)
+    Printf.printf "=> %s\n%!" (jToString (beta (string2intJ res)))
   with
   | Lexer.Error msg ->
       Printf.fprintf stderr "%s%!" msg

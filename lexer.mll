@@ -45,6 +45,8 @@ and token = parse
     { DOT }
 | [ ',' ]
     { COMMA }
+| [ '?' ]
+    { QUESTION }
 | ['A'-'Z' 'a'-'z' '_']
   ['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
     { VAR (Lexing.lexeme lexbuf) }

@@ -3,7 +3,7 @@
 %token DERRIVES
 %token ARROW COLON
 %token DOT COMMA
-%token EOL
+%token QUESTION EOL
 
 %start <Term.strJud> main
 %{open Term %}
