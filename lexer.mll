@@ -31,6 +31,10 @@ and token = parse
     { EOL }
 | "lambda"
     { LAMBDA }
+| "->"
+    { ARROW }
+| ":"
+    { COLON }
 | [ '(' ]
     { LPAREN }
 | [ ')' ]

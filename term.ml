@@ -1,8 +1,17 @@
 (* ast is returned from the parser *)
-type ast =
+type astTerm =
   | AVar of string
-  | AAbs of string * ast
-  | AApp of ast * ast
+  | AAbs of string * astTerm
+  | AApp of astTerm * astTerm
+
+type astType =
+  | ATVar of string
+  | ATFun of astType * astType
+
+type astStm = AStm of astTerm * astType
+
+let getTerm stm =
+  match stm with AStm(t, _) -> t;
 
 (* 
 TVar(len, x)
