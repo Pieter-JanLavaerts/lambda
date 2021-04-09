@@ -20,7 +20,7 @@ statement:
   | t = term; COLON; ty = typ { Stm(t, ty) }
 
 term:
-  | v = var { TVar(v) }
+  | v = VAR { TVar(v) }
   | LPAREN; LAMBDA;  d = decl; DOT; t = term; RPAREN { TAbs(d, t) }
   | LPAREN; t1 = term; t2 = term; RPAREN { TApp(t1, t2) }
 
@@ -30,12 +30,8 @@ context:
   | d = decl; COMMA; c = context { ctxCons d c }
 
 decl:
-  | v = var; COLON; ty = typ { Decl(v, ty) }
+  | v = VAR; COLON; ty = typ { Decl(v, ty) }
 
 typ:
-  | v = var { YVar(v) }
+  | v = VAR { YVar(v) }
   | LPAREN; ty1 = typ; ARROW; ty2 = typ; RPAREN { YFun(ty1, ty2) }
-
-var:
-  | v = VAR { Var(v) }
-					 

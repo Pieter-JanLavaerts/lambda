@@ -1,60 +1,75 @@
-type 'a var = Var of 'a
+(* ast *)
 
-type 'a typ = YVar of 'a var | YFun of 'a typ * 'a typ
+type typ =
+  | YVar of string
+  | YFun of typ * typ
 
-type 'a decl = Decl of 'a var * 'a typ
-type 'a ctx = Ctx of ('a decl) list
+type decl = Decl of string * typ
 
+type ctx = Ctx of decl list
 let ctxCons d c =
   match c with
   | Ctx(l) -> Ctx(d :: l)
 
 type 'a term =
-  | TVar of 'a var
-  | TAbs of 'a decl * 'a term
+  | TVar of 'a
+  | TAbs of decl * 'a term
   | TApp of 'a term * 'a term
 
-type 'a stm = Stm of 'a term * 'a typ
-type 'a jud = Jud of 'a ctx * 'a stm
+type 'a stm = Stm of 'a term * typ
 
-type strJud = string jud
+type 'a jud = Jud of ctx * 'a stm
 
-let eval a =
-  match a with
-  | Jud(_, _) -> "Yes!"
+type strJud = string jud (* used for main type declaration in parser *)
+
+(* to string *)
+let rec tyToString(t : typ) : string =
+  match t with
+  | YVar(ty) -> ty
+  | YFun(ty1, ty2) -> "(" ^ tyToString(ty1) ^ " -> " ^ tyToString(ty2) ^ ")"
+let dToString (Decl(v, ty) : decl) = v ^ " : " ^ tyToString(ty)
+let rec cToString (Ctx(l) : ctx) =
+  match l with
+  | [] -> ""
+  | d :: [] -> dToString d
+  | d :: t -> dToString d ^ ", " ^ cToString (Ctx(t))
+let rec tToString (t : 'a term) =
+  match t with
+(*| TVar(v) -> v*)
+(*| TVar(v) -> string_of_int v*)
+  | TVar(v) -> v
+  | TAbs(d, t) -> "(lambda " ^ dToString d ^ " . " ^ (tToString t) ^ ")"
+  | TApp(t1, t2) -> "(" ^ tToString t1 ^ " " ^ tToString t2 ^ ")"
+let sToString (Stm(t, ty) : 'a stm) : string = tToString t ^ " : " ^ tyToString ty
+let jToString (Jud(c, s) : 'a jud) : string = cToString c ^ " |> " ^ sToString s
+  
+
+(* str2int *)
+let ctxlen (ctx : ctx) : int =
+  match ctx with
+  | Ctx(l) -> List.length l
+
+let rec find (x : string) (Ctx(lst) : ctx) : int =
+  match lst with
+  | [] -> raise (Failure "Not Found")
+  | Decl(h, _) :: t -> if x = h then 0 else 1 + find x (Ctx(t))
+
+let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
+  match term with
+  | TVar(s) -> TVar(find s ctx)
+  | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
+  | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
+
+let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
+  match stm with
+  | Stm(term, ty) -> Stm(string2intTerm term ctx, ty)
+
+let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
+
+let eval j = jToString j
 
 (*
-  | ATVar of string
-  | ATFun of astType * astType
-
-  | AVar of string
-  | AAbs of string * astTerm
-  | AApp of astTerm * astTerm
-*)
-
-
-(*
-let getTerm stm =
-  match stm with AStm(t, _) -> t;
-
-(* 
-TVar(len, x)
-len is the length of the context for consistency checking
-x is the Debruijn index 
-*)
-type term = 
-  | TVar of int * int
-  | TAbs of string * term
-  | TApp of term * term
-
-type context = string list
-let ctxlen ctx = List.length ctx
-
 (* Constructing terms from ast *)
-let rec find x lst =
-    match lst with
-    | [] -> raise (Failure "Not Found")
-    | h :: t -> if x = h then 0 else 1 + find x t
 
 let rec ast2termf ast ctx =
   match ast with
@@ -155,4 +170,4 @@ let rec beta t =
   with Done -> t
 
 let eval = beta
-*)
+ *)
