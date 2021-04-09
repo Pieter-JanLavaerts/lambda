@@ -40,7 +40,11 @@ type 'a stm = Stm of 'a term * typ
 (* A judgement is a statement with a context *)
 type 'a jud = Jud of ctx * 'a stm
 
-type strJud = string jud (* used for main type declaration in parser *)
+type query =
+  | WellTyped of string term
+  | TypeAssignment of ctx * string term
+  | TypeCheck of string jud
+  | TermSearch of ctx * typ
 
 (* AST to string *)
 let greek s =
@@ -101,7 +105,7 @@ let rec tToString (t : 'a term) =
   match t with
 (*| TVar(v) -> v*)
 (*| TVar(v) -> string_of_int v*)
-  | TVar(v) -> string_of_int v  
+  | TVar(v) -> v  
   | TAbs(d, t) -> "(λ " ^ dToString d ^ " . " ^ (tToString t) ^ ")"
   | TApp(t1, t2) -> "(" ^ tToString t1 ^ " " ^ tToString t2 ^ ")"
 
@@ -134,6 +138,17 @@ let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
   | Stm(term, ty) -> Stm(string2intTerm term ctx, ty)
 
 let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
+
+(* query to string *)
+let queryToString q =
+  match q with
+  | WellTyped(t) ->
+    "Well-typed: ? |> " ^ tToString(t) ^ " : ?"
+  | TypeAssignment(c, t) ->
+    "Type assignment: " ^ cToString(c) ^ " |> " ^ tToString(t) ^ " : ?"
+  | TypeCheck(j) ->
+    "Type check: " ^ jToString j
+  | TermSearch(c, t) -> "Term search: " ^ cToString(c) ^ " : " ^ tyToString(t)
 
 (* Type checking *)
 (* c = cutoff, d = destination *)

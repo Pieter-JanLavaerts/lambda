@@ -5,13 +5,16 @@
 %token DOT COMMA
 %token QUESTION EOL
 
-%start <Term.strJud> main
+%start <Term.query> main
 %{open Term %}
 
 %%
 
 main:
-  | j = judgement; EOL { j }
+  | QUESTION; DERRIVES; t = term; COLON; QUESTION { WellTyped(t) }
+  | c = context; DERRIVES; t = term; COLON; QUESTION { TypeAssignment(c, t) }
+  | j = judgement; EOL { TypeCheck(j) }
+  | c = context; DERRIVES; QUESTION; COLON; t = typ { TermSearch(c, t) }
 
 judgement:
   | c = context; DERRIVES; s = statement { Jud(c, s) }
