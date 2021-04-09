@@ -1,0 +1,9 @@
+(ocamllex
+  (modules lexer))
+
+(menhir
+  (modules parser)
+  (flags -la 2 -lc 3 --dump-resolved --comment --no-code-inlining))
+
+(executable
+ (name lambda))
