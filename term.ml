@@ -25,6 +25,14 @@ let ctxCons d c =
   match c with
   | Ctx(l) -> Ctx(d :: l)
 
+let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
+  match lst with
+  | [] -> raise (Failure "Variable not in context")
+  | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
+
+let ctxfind (x : string) (Ctx(lst) : ctx) : decl =
+  List.nth lst (ctxindex x (Ctx(lst)))
+
 (* 
 parser constructs string terms
 converted to int terms (DeBruijn) for evaluation
@@ -118,18 +126,10 @@ let ctxlen (ctx : ctx) : int =
   match ctx with
   | Ctx(l) -> List.length l
 
-(* takes a variable name and a context 
-   returns the index of the variable in the context 
-   or Failer of not found *)
-let rec find (x : string) (Ctx(lst) : ctx) : int =
-  match lst with
-  | [] -> raise (Failure "Not Found")
-  | Decl(h, _) :: t -> if x = h then 0 else 1 + find x (Ctx(t))
-
 (* Assign DeBruijn indexes *)
 let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
   match term with
-  | TVar(s) -> TVar(find s ctx)
+  | TVar(s) -> TVar(ctxindex s ctx)
   | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
   | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
 
@@ -139,6 +139,78 @@ let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
 
 let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
 
+
+(* Well-typedeness *)
+let typeOfDecl (d : decl) : typ =
+  match d with Decl(_, ty) -> ty
+
+let yFunFrom (t : typ) : typ =
+  match t with
+  | YFun(f, _) -> f
+  | _ ->
+    let msg = "Expected YFun but got " ^ (tyToString t) ^ "." in
+    raise (Failure msg)
+
+let yFunTo (t : typ) : typ =
+  match t with
+  | YFun(_, t) -> t
+  | _ -> 
+  let msg = "Expected YFun but got " ^ (tyToString t) ^ "." in
+  raise (Failure msg)
+
+let rec typeOf (term : string term) (c : ctx) : typ =
+  match term with
+  | TVar(v) -> typeOfDecl(ctxfind v c)
+  | TAbs(d, t) -> YFun((typeOf t (ctxCons d c)), (typeOfDecl d))
+  | TApp(t1, t2) ->
+    let t1y = (typeOf t1 c) in
+    let t2y = (typeOf t2 c) in
+    if (yFunFrom t1y) = t2y then (yFunTo t1y)
+    else raise (Failure "Type error in application")
+
+(* Type checking *)
+type derrivation = 
+  | DVar of string jud
+  | DAbs of string jud * derrivation
+  | DApp of string jud * derrivation * derrivation
+
+let rec derrive (j : string jud) : derrivation =
+  match j with
+  | Jud(c, Stm(t, ty)) ->
+    match t with
+    | TVar(v) ->
+      let Decl(_, cty) = (ctxfind v c) in
+      if ty = cty then
+        DVar(j)
+      else
+        let msg = "Expected type of " ^ (tyToString ty) ^
+                  " but found " ^ (tyToString cty) in
+        raise (Failure msg)
+    | TApp(t1, t2) ->
+      let t1y = (typeOf t1 c) in
+      let t2y = (typeOf t2 c) in
+      if (yFunFrom t1y) = t2y then
+        DApp(j, (derrive (Jud(c, Stm(t1, t1y)))), (derrive (Jud(c, Stm(t2, t2y)))))
+      else raise (Failure "Type error in application")
+    | TAbs(Decl(v, vt), t) ->
+     (match ty with
+       | YFun(lt, rt) ->
+         if lt = vt then
+           DAbs(j, derrive(Jud(ctxCons (Decl(v, vt)) c, Stm(t, rt))))
+         else
+           let msg = "Expected abstraction parameter of " ^ (tyToString lt) ^
+                     " but found " ^ (tyToString vt) in
+           raise (Failure msg)
+       | YVar(v) -> 
+         let msg = "Abstraction of non function type " ^ v in
+         raise (Failure msg))
+
+let rec derrivationToString (d : derrivation) =
+    match d with
+    | DVar(j) -> jToString(j) ^ "\t (var)\n"
+    | DAbs(j, d) -> derrivationToString(d) ^ jToString(j) ^ "\t (abs) \n"
+    | DApp(j, d1, d2) -> derrivationToString(d1) ^ derrivationToString(d2) ^ jToString(j) ^ "\t (app) \n"
+
 (* query to string *)
 let queryToString q =
   match q with
@@ -147,57 +219,6 @@ let queryToString q =
   | TypeAssignment(c, t) ->
     "Type assignment: " ^ cToString(c) ^ " |> " ^ tToString(t) ^ " : ?"
   | TypeCheck(j) ->
-    "Type check: " ^ jToString j
-  | TermSearch(c, t) -> "Term search: " ^ cToString(c) ^ " : " ^ tyToString(t)
-
-(* Type checking *)
-(* c = cutoff, d = destination *)
-let rec shift (c : int) (d : int) (t : int term) : int term =
-  match t with
-  | TVar(i) -> if i < c then TVar(i) else TVar(i + d)
-  | TAbs(x, t) -> TAbs(x, shift (c+1) d t)
-  | TApp(t1, t2) -> TApp(shift c d t1, shift c d t2)
-let shift d t = shift 0 d t
-
-let rec subs (j : int) (s : int term) (t : int term) =
-  match t with
-  | TVar(k) ->
-    if k = j then s else TVar(k)
-  | TAbs(name, t1) ->
-    TAbs(name, subs (j+1) (shift 1 s) t1)
-  | TApp(t1, t2) ->
-    TApp(subs j s t1 , subs j s t2)
-
-let substop s t =
-  shift (-1) (subs 0 (shift 1 s) t)
-
-exception Done
-let rec beta1 t =
-  let isval t =
-    match t with
-    | TApp(_, _) -> false
-    | _ -> true
-  in
-
-  match t with
-  | TApp(TAbs(_,m),n) when isval n ->
-      substop n m
-
-  | TApp(v1,t2) when isval v1 ->
-      let t2' = beta1 t2 in
-      TApp(v1, t2')
-
-  | TApp(t1,t2) ->
-      let t1' = beta1 t1 in
-      TApp(t1', t2)
-
-  | _ -> raise Done
-
-let rec beta t =
-  try let t' = beta1 t in
-    beta t'
-  with Done -> t
-
-let beta (j : int jud) : int jud =
-  match j with
-  | Jud(c, Stm(t, ty)) -> Jud(c, Stm(beta t, ty))
+    "Type check: " ^ jToString j ^ "\n" ^ derrivationToString(derrive(j))
+  | TermSearch(c, t) ->
+    "Term search: " ^ cToString(c) ^ " |> ? : " ^ tyToString(t)

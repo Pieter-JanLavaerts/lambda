@@ -4,8 +4,9 @@ let process (line : string) =
   let linebuf = Lexing.from_string line in
   try
     (* Run the parser on this line of input. *)
+    Printf.printf ">>> ";
     let q = Parser.main Lexer.token linebuf in
-    Printf.printf "=> %s\n%!" (queryToString q)
+    Printf.printf "%s\n%!" (queryToString q)
   with
   | Lexer.Error msg ->
       Printf.fprintf stderr "%s%!" msg
