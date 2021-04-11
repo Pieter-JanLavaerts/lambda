@@ -139,7 +139,6 @@ let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
 
 let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
 
-
 (* Well-typedeness *)
 let typeOfDecl (d : decl) : typ =
   match d with Decl(_, ty) -> ty
@@ -161,7 +160,7 @@ let yFunTo (t : typ) : typ =
 let rec typeOf (term : string term) (c : ctx) : typ =
   match term with
   | TVar(v) -> typeOfDecl(ctxfind v c)
-  | TAbs(d, t) -> YFun((typeOf t (ctxCons d c)), (typeOfDecl d))
+  | TAbs(d, t) -> YFun((typeOfDecl d), (typeOf t (ctxCons d c)))
   | TApp(t1, t2) ->
     let t1y = (typeOf t1 c) in
     let t2y = (typeOf t2 c) in
@@ -174,6 +173,7 @@ type derrivation =
   | DAbs of string jud * derrivation
   | DApp of string jud * derrivation * derrivation
 
+exception DerrivationFail of string jud * string
 let rec derrive (j : string jud) : derrivation =
   match j with
   | Jud(c, Stm(t, ty)) ->
@@ -185,25 +185,25 @@ let rec derrive (j : string jud) : derrivation =
       else
         let msg = "Expected type of " ^ (tyToString ty) ^
                   " but found " ^ (tyToString cty) in
-        raise (Failure msg)
+        raise (DerrivationFail(j, msg))
+    | TAbs(Decl(x, xty), t) ->
+      (match ty with
+       | YFun(lty, rty) ->
+         if lty = xty then
+           DAbs(j, (derrive (Jud((ctxCons (Decl(x, xty)) c), Stm(t, rty)))))
+         else
+           let msg = "Expected abstraction parameter of " ^ (tyToString lty) ^ " but got " ^ (tyToString ty) in
+           raise (DerrivationFail(j, msg))
+       | YVar(_) ->
+         let msg = "Abstraction with non function type " ^ (tyToString ty) ^ "." in
+         raise (DerrivationFail(j, msg)))
     | TApp(t1, t2) ->
       let t1y = (typeOf t1 c) in
       let t2y = (typeOf t2 c) in
       if (yFunFrom t1y) = t2y then
         DApp(j, (derrive (Jud(c, Stm(t1, t1y)))), (derrive (Jud(c, Stm(t2, t2y)))))
-      else raise (Failure "Type error in application")
-    | TAbs(Decl(v, vt), t) ->
-     (match ty with
-       | YFun(lt, rt) ->
-         if lt = vt then
-           DAbs(j, derrive(Jud(ctxCons (Decl(v, vt)) c, Stm(t, rt))))
-         else
-           let msg = "Expected abstraction parameter of " ^ (tyToString lt) ^
-                     " but found " ^ (tyToString vt) in
-           raise (Failure msg)
-       | YVar(v) -> 
-         let msg = "Abstraction of non function type " ^ v in
-         raise (Failure msg))
+      else
+        raise (DerrivationFail(j, "Type error in application"))
 
 let rec derrivationToString (d : derrivation) =
     match d with
@@ -211,14 +211,22 @@ let rec derrivationToString (d : derrivation) =
     | DAbs(j, d) -> derrivationToString(d) ^ jToString(j) ^ "\t (abs) \n"
     | DApp(j, d1, d2) -> derrivationToString(d1) ^ derrivationToString(d2) ^ jToString(j) ^ "\t (app) \n"
 
+let derriveAndPrint (j : string jud) : string =
+  try derrivationToString (derrive j) with
+    DerrivationFail(j, s) ->
+    "Failed derriving: " ^ jToString j ^ "\n" ^ s
+
 (* query to string *)
 let queryToString q =
   match q with
   | WellTyped(t) ->
     "Well-typed: ? |> " ^ tToString(t) ^ " : ?"
   | TypeAssignment(c, t) ->
-    "Type assignment: " ^ cToString(c) ^ " |> " ^ tToString(t) ^ " : ?"
+    let ty = (typeOf t  c) in
+    "Type assignment: " ^ cToString(c) ^ " |> " ^ tToString(t) ^ " : ?\n" ^
+    let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
   | TypeCheck(j) ->
-    "Type check: " ^ jToString j ^ "\n" ^ derrivationToString(derrive(j))
+    "Type check: " ^ jToString j ^ "\n" ^
+    derriveAndPrint(j)
   | TermSearch(c, t) ->
     "Term search: " ^ cToString(c) ^ " |> ? : " ^ tyToString(t)
