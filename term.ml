@@ -28,12 +28,8 @@ let ctxCons (d : decl) (Ctx(l) : ctx) : ctx = Ctx(d :: l)
 parser constructs string terms
 converted to int terms (DeBruijn) for evaluation
 *)
-type _ var =
-  | Int: int var
-  | String: string var
-
 type 'a term =
-  | TVar of 'a * 'a var
+  | TVar of 'a
   | TAbs of decl * 'a term
   | TApp of 'a term * 'a term
 
@@ -43,10 +39,10 @@ type 'a stm = Stm of 'a term * typ
 (* A judgement is a statement with a context *)
 type 'a jud = Jud of ctx * 'a stm
 
-type query =
-  | WellTyped of string term
-  | TypeAssignment of ctx * string term
-  | TypeCheck of string jud
+type 'a query =
+  | WellTyped of 'a term
+  | TypeAssignment of ctx * 'a term
+  | TypeCheck of 'a jud
   | TermSearch of ctx * typ
 
 (* Assign DeBruijn indexes (str2int) *)
@@ -59,19 +55,12 @@ let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
   | [] -> raise (Failure "Variable not in context")
   | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
 
-let ctxfind: type a. a -> a var -> ctx -> decl =
-  fun v vy ctx ->
-  match ctx with Ctx(lst) ->
-    let index : int =
-      (match vy with
-       | Int -> v 
-       | String -> ctxindex v ctx)
-    in
-    List.nth lst index
+let ctxfind (x : int) (Ctx(l): ctx) : decl =
+  List.nth l x
 
 let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
   match term with
-  | TVar(s, _) -> TVar(ctxindex s ctx, Int)
+  | TVar(s) -> TVar(ctxindex s ctx)
   | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
   | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
 
@@ -79,7 +68,7 @@ let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
   match stm with
   | Stm(term, ty) -> Stm(string2intTerm term ctx, ty)
 
-let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
+let string2intJud (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
 
 (* AST to string *)
 let greek s =
@@ -151,16 +140,10 @@ let rec cToString (Ctx(l) : ctx) =
     let dn = (newDecl d (Ctx(l))) in
     dToString dn ^ ", " ^ cToString (Ctx(t))
 
-let varToStringf: type a. a var -> a -> string =
-  fun var x ->
-  match var with
-  | Int -> string_of_int x
-  | String -> x
-
 let rec tToString (t : int term) (c : ctx) : string =
   match t with
-  | TVar(v, vy) ->
-    (match (ctxfind v vy c) with Decl(v, _) -> v)
+  | TVar(v) ->
+    (match (ctxfind v c) with Decl(v, _) -> v)
   | TAbs(d, t) ->
     let Decl(v, vy) = (newDecl d c) in
     "(λ " ^ v ^ " : " ^ (tyToString vy) ^ " . " ^ (tToString t (ctxCons (Decl(v, vy)) c)) ^ ")"
@@ -190,7 +173,7 @@ let yFunTo (t : typ) : typ =
 
 let rec typeOf (term : 'a term) (c : ctx) : typ =
   match term with
-  | TVar(v, vy) -> typeOfDecl((ctxfind v vy) c)
+  | TVar(v) -> typeOfDecl(ctxfind v c)
   | TAbs(d, t) -> YFun((typeOfDecl d), (typeOf t (ctxCons d c)))
   | TApp(t1, t2) ->
     let t1y = (typeOf t1 c) in
@@ -209,8 +192,8 @@ let rec derrive (j : 'a jud) : derrivation =
   match j with
   | Jud(c, Stm(t, ty)) ->
     match t with
-    | TVar(v, vy) ->
-      let Decl(_, cty) = (ctxfind v vy c) in
+    | TVar(v) ->
+      let Decl(_, cty) = (ctxfind v c) in
       if ty = cty then
         DVar(j)
       else
@@ -242,22 +225,32 @@ let rec derrivationToString (d : derrivation) =
     | DAbs(j, d) -> derrivationToString(d) ^ jToString(j) ^ "\t (abs) \n"
     | DApp(j, d1, d2) -> derrivationToString(d1) ^ derrivationToString(d2) ^ jToString(j) ^ "\t (app) \n"
 
-let derriveAndPrint (j : string jud) : string =
-  try derrivationToString (derrive (string2intJ j)) with
+let derriveAndPrint (j : int jud) : string =
+  try derrivationToString (derrive j) with
     DerrivationFail(j, s) ->
     "Failed derriving: " ^ jToString j ^ "\n" ^ s
 
 (* query to string *)
-let queryToString q =
+type stringquery = string query
+
+let string2intQuery (q : string query) : int query =
+  match q with
+  | WellTyped(t) -> WellTyped(string2intTerm t (Ctx([])))
+  | TypeAssignment(c, t) -> TypeAssignment(c, string2intTerm t c)
+  | TypeCheck(j) -> TypeCheck(string2intJud j)
+  | TermSearch(c, ty) -> TermSearch(c, ty)
+
+let queryToString sq =
+  let q = string2intQuery sq in
   match q with
   | WellTyped(t) ->
-    "Well-typed: ? |> " ^ (tToString (string2intTerm t (Ctx[])) (Ctx([]))) ^ " : ?"
+    "Well-typed: ? |> " ^ (tToString t (Ctx([]))) ^ " : ?"
   | TypeAssignment(c, t) ->
     let ty = (typeOf t c) in
-    "Type assignment: " ^ cToString(c) ^ " |> " ^ (tToString (string2intTerm t c) c)  ^ " : ?\n" ^
+    "Type assignment: " ^ cToString(c) ^ " |> " ^ (tToString t c)  ^ " : ?\n" ^
     let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
   | TypeCheck(j) ->
-    "Type check: " ^ jToString (string2intJ j) ^ "\n" ^
+    "Type check: " ^ jToString j ^ "\n" ^
     derriveAndPrint(j)
   | TermSearch(c, t) ->
     "Term search: " ^ cToString(c) ^ " |> ? : " ^ tyToString(t)
