@@ -240,17 +240,37 @@ let string2intQuery (q : string query) : int query =
   | TypeCheck(j) -> TypeCheck(string2intJud j)
   | TermSearch(c, ty) -> TermSearch(c, ty)
 
+let rec numFreeVars t =
+  match t with
+  | TVar(_) -> 1
+  | TAbs(_, t2) -> (numFreeVars t2) - 1
+  | TApp(t1, t2) -> (numFreeVars t1) + (numFreeVars t2)
+
 let queryToString sq =
-  let q = string2intQuery sq in
-  match q with
-  | WellTyped(t) ->
-    "Well-typed: ? |- " ^ (tToString t (Ctx([]))) ^ " : ?"
-  | TypeAssignment(c, t) ->
-    let ty = (typeOf t c) in
-    "Type assignment: " ^ cToString(c) ^ " |- " ^ (tToString t c)  ^ " : ?\n" ^
-    let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
+  match sq with
+  | WellTyped(ts) ->
+    if numFreeVars ts = 0 then
+      let c = Ctx([]) in
+      let t = string2intTerm ts c in
+      let ty = (typeOf t c) in
+      let j = Jud(c, Stm(t, ty)) in
+      "Well typed:  ? |- " ^ (tToString t c)  ^ " : ?\n" ^
+      derriveAndPrint(j)
+    else
+      string_of_int (numFreeVars ts) ^ " free variable(s).\n"
+  | TypeAssignment(Ctx(l), ts) ->
+    let fv = numFreeVars ts in
+    let len = List.length l in
+    if fv > len then
+      "More free variables (" ^ string_of_int fv ^ ") than size of context (" ^ string_of_int len ^ "). \n"
+    else
+      let c = Ctx(l) in
+      let t = string2intTerm ts c in
+      let ty = (typeOf t c) in
+      "Type assignment: " ^ cToString(c) ^ " |- " ^ (tToString t c)  ^ " : ?\n" ^
+      let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
   | TypeCheck(j) ->
-    "Type check: " ^ jToString j ^ "\n" ^
-    derriveAndPrint(j)
+    "Type check: " ^ jToString (string2intJud j) ^ "\n" ^
+    derriveAndPrint(string2intJud j)
   | TermSearch(c, t) ->
     "Term search: " ^ cToString(c) ^ " |- ? : " ^ tyToString(t)
