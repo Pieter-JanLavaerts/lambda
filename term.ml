@@ -25,20 +25,16 @@ let ctxCons d c =
   match c with
   | Ctx(l) -> Ctx(d :: l)
 
-let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
-  match lst with
-  | [] -> raise (Failure "Variable not in context")
-  | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
-
-let ctxfind (x : string) (Ctx(lst) : ctx) : decl =
-  List.nth lst (ctxindex x (Ctx(lst)))
-
 (* 
 parser constructs string terms
 converted to int terms (DeBruijn) for evaluation
 *)
+type _ var =
+  | Int: int var
+  | String: string var
+
 type 'a term =
-  | TVar of 'a
+  | TVar of 'a * 'a var
   | TAbs of decl * 'a term
   | TApp of 'a term * 'a term
 
@@ -109,11 +105,15 @@ let rec cToString (Ctx(l) : ctx) =
   | d :: [] -> dToString d
   | d :: t -> dToString d ^ ", " ^ cToString (Ctx(t))
 
+let varToStringf: type a. a var -> a -> string =
+  fun var x ->
+  match var with
+  | Int -> string_of_int x
+  | String -> x
+
 let rec tToString (t : 'a term) =
   match t with
-(*| TVar(v) -> v*)
-(*| TVar(v) -> string_of_int v*)
-  | TVar(v) -> v  
+  | TVar(v, vy) -> (varToStringf vy) v
   | TAbs(d, t) -> "(λ " ^ dToString d ^ " . " ^ (tToString t) ^ ")"
   | TApp(t1, t2) -> "(" ^ tToString t1 ^ " " ^ tToString t2 ^ ")"
 
@@ -127,9 +127,24 @@ let ctxlen (ctx : ctx) : int =
   | Ctx(l) -> List.length l
 
 (* Assign DeBruijn indexes *)
+let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
+  match lst with
+  | [] -> raise (Failure "Variable not in context")
+  | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
+
+let ctxfind: type a. a -> a var -> ctx -> decl =
+  fun v vy ctx ->
+  match ctx with Ctx(lst) ->
+    let index : int =
+      (match vy with
+       | Int -> v 
+       | String -> ctxindex v ctx)
+    in
+    List.nth lst index
+
 let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
   match term with
-  | TVar(s) -> TVar(ctxindex s ctx)
+  | TVar(s, _) -> TVar(ctxindex s ctx, Int)
   | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
   | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
 
@@ -157,9 +172,9 @@ let yFunTo (t : typ) : typ =
   let msg = "Expected YFun but got " ^ (tyToString t) ^ "." in
   raise (Failure msg)
 
-let rec typeOf (term : string term) (c : ctx) : typ =
+let rec typeOf (term : 'a term) (c : ctx) : typ =
   match term with
-  | TVar(v) -> typeOfDecl(ctxfind v c)
+  | TVar(v, vy) -> typeOfDecl((ctxfind v vy) c)
   | TAbs(d, t) -> YFun((typeOfDecl d), (typeOf t (ctxCons d c)))
   | TApp(t1, t2) ->
     let t1y = (typeOf t1 c) in
@@ -174,12 +189,12 @@ type derrivation =
   | DApp of string jud * derrivation * derrivation
 
 exception DerrivationFail of string jud * string
-let rec derrive (j : string jud) : derrivation =
+let rec derrive (j : 'a jud) : derrivation =
   match j with
   | Jud(c, Stm(t, ty)) ->
     match t with
-    | TVar(v) ->
-      let Decl(_, cty) = (ctxfind v c) in
+    | TVar(v, vy) ->
+      let Decl(_, cty) = (ctxfind v vy c) in
       if ty = cty then
         DVar(j)
       else

@@ -34,7 +34,7 @@ term2:
   | tl = term2; t2 = term3 { TApp(tl, t2) }
 
 term3:
-  | v = VAR { TVar(v) }
+  | v = VAR { TVar(v, String) }
   | LPAREN; l = lambda; RPAREN { l }
   | LPAREN; t1 = term2; t2 = term2; RPAREN { TApp(t1, t2) }
 
