@@ -1,6 +1,6 @@
 (*
 
-q: a, y : a -> b |> (lambda z : a . (y z)) : a -> b
+q: a, y : a -> b |- (lambda z : a . (y z)) : a -> b
 
 \--------V------/  \---------------V--------------/
       Context                  Statement
@@ -151,7 +151,7 @@ let rec tToString (t : int term) (c : ctx) : string =
 
 let sToString (Stm(t, ty) : int stm) (c : ctx) : string = tToString t c ^ " : " ^ tyToString ty
 
-let jToString (Jud(c, s) : int jud) : string = cToString c ^ " |> " ^ (sToString s c)
+let jToString (Jud(c, s) : int jud) : string = cToString c ^ " |- " ^ (sToString s c)
 
 (* Well-typedeness *)
 let typeOfDecl (d : decl) : typ =
@@ -244,13 +244,13 @@ let queryToString sq =
   let q = string2intQuery sq in
   match q with
   | WellTyped(t) ->
-    "Well-typed: ? |> " ^ (tToString t (Ctx([]))) ^ " : ?"
+    "Well-typed: ? |- " ^ (tToString t (Ctx([]))) ^ " : ?"
   | TypeAssignment(c, t) ->
     let ty = (typeOf t c) in
-    "Type assignment: " ^ cToString(c) ^ " |> " ^ (tToString t c)  ^ " : ?\n" ^
+    "Type assignment: " ^ cToString(c) ^ " |- " ^ (tToString t c)  ^ " : ?\n" ^
     let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
   | TypeCheck(j) ->
     "Type check: " ^ jToString j ^ "\n" ^
     derriveAndPrint(j)
   | TermSearch(c, t) ->
-    "Term search: " ^ cToString(c) ^ " |> ? : " ^ tyToString(t)
+    "Term search: " ^ cToString(c) ^ " |- ? : " ^ tyToString(t)
