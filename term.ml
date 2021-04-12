@@ -219,14 +219,26 @@ let rec derrive (j : 'a jud) : derrivation =
       else
         raise (DerrivationFail(j, "Type error in application"))
 
-let rec derrivationToString (d : derrivation) =
+let rec derrivationToString (d : derrivation) (linum : int) : string * int =
+  let s, l =
     match d with
-    | DVar(j) -> jToString(j) ^ "\t (var)\n"
-    | DAbs(j, d) -> derrivationToString(d) ^ jToString(j) ^ "\t (abs) \n"
-    | DApp(j, d1, d2) -> derrivationToString(d1) ^ derrivationToString(d2) ^ jToString(j) ^ "\t (app) \n"
+    | DVar(j) ->
+      let js = (string_of_int linum) ^ ") " ^ (jToString j) in
+      js ^ "\t (var)", linum + 1
+    | DAbs(j, d1) ->
+      let ds, _ = (derrivationToString d1 (linum + 1)) in
+      let js = (string_of_int linum) ^ ") " ^ (jToString j) in
+      ds ^ js ^ "\t (abs) of " ^ string_of_int (linum + 1), linum + 1
+    | DApp(j, d1, d2) ->
+      let js = (string_of_int linum) ^ ") " ^ (jToString j) in
+      let s1, l1 = (derrivationToString d1 (linum + 1)) in
+      let s2, l2 = (derrivationToString d2 l1) in
+      s2 ^ s1 ^ js ^ "\t (appl) of " ^ string_of_int (linum + 1) ^ " and " ^ string_of_int l1, l2
+  in
+  s ^ "\n", l
 
 let derriveAndPrint (j : int jud) : string =
-  try derrivationToString (derrive j) with
+  try let s, _ = derrivationToString (derrive j) 0 in s with
     DerrivationFail(j, s) ->
     "Failed derriving: " ^ jToString j ^ "\n" ^ s
 
