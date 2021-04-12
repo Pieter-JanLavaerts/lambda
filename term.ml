@@ -22,21 +22,7 @@ type decl = Decl of string * typ
 (* A Context is a list of declarations *)
 type ctx = Ctx of decl list
 
-let rec isNewDecl (Decl(v, vy) : decl) (Ctx(l) : ctx) : bool =
-  match l with
-  | [] -> true
-  | Decl(vh, _) :: t ->
-    if vh = v
-    then false
-    else (isNewDecl (Decl(v, vy)) (Ctx(t)))
-
-let rec newDecl (d : decl) (l : ctx) : decl =
-  if (isNewDecl d l)
-  then d
-  else match d with Decl(v, vy) -> (newDecl (Decl(v ^ "'", vy)) l)
-
-let ctxCons (d : decl) (Ctx(l) : ctx) : ctx =
-  Ctx((newDecl d (Ctx(l))) :: l)
+let ctxCons (d : decl) (Ctx(l) : ctx) : ctx = Ctx(d :: l)
 
 (* 
 parser constructs string terms
@@ -86,7 +72,7 @@ let ctxfind: type a. a -> a var -> ctx -> decl =
 let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
   match term with
   | TVar(s, _) -> TVar(ctxindex s ctx, Int)
-  | TAbs(d, t) -> TAbs((newDecl d ctx), string2intTerm t (ctxCons d ctx))
+  | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
   | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
 
 let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
@@ -144,11 +130,26 @@ let rec tyToString(t : typ) : string =
 
 let dToString (Decl(v, ty) : decl) = v ^ " : " ^ tyToString(ty)
 
+let rec isNewDecl (Decl(v, vy) : decl) (Ctx(l) : ctx) : bool =
+  match l with
+  | [] -> true
+  | Decl(vh, _) :: t ->
+    if vh = v
+    then false
+    else (isNewDecl (Decl(v, vy)) (Ctx(t)))
+
+let rec newDecl (d : decl) (l : ctx) : decl =
+  if (isNewDecl d l)
+  then d
+  else match d with Decl(v, vy) -> (newDecl (Decl(v ^ "'", vy)) l)
+
 let rec cToString (Ctx(l) : ctx) =
   match l with
   | [] -> ""
   | d :: [] -> dToString d
-  | d :: t -> dToString d ^ ", " ^ cToString (Ctx(t))
+  | d :: t ->
+    let dn = (newDecl d (Ctx(l))) in
+    dToString dn ^ ", " ^ cToString (Ctx(t))
 
 let varToStringf: type a. a var -> a -> string =
   fun var x ->
@@ -156,15 +157,18 @@ let varToStringf: type a. a var -> a -> string =
   | Int -> string_of_int x
   | String -> x
 
-let rec tToString (t : 'a term) =
+let rec tToString (t : int term) (c : ctx) : string =
   match t with
-  | TVar(v, vy) -> (varToStringf vy) v
-  | TAbs(d, t) -> "(λ " ^ dToString d ^ " . " ^ (tToString t) ^ ")"
-  | TApp(t1, t2) -> "(" ^ tToString t1 ^ " " ^ tToString t2 ^ ")"
+  | TVar(v, vy) ->
+    (match (ctxfind v vy c) with Decl(v, _) -> v)
+  | TAbs(d, t) ->
+    let Decl(v, vy) = (newDecl d c) in
+    "(λ " ^ v ^ " : " ^ (tyToString vy) ^ " . " ^ (tToString t (ctxCons (Decl(v, vy)) c)) ^ ")"
+  | TApp(t1, t2) -> "(" ^ (tToString t1 c) ^ " " ^ (tToString t2 c) ^ ")"
 
-let sToString (Stm(t, ty) : 'a stm) : string = tToString t ^ " : " ^ tyToString ty
+let sToString (Stm(t, ty) : int stm) (c : ctx) : string = tToString t c ^ " : " ^ tyToString ty
 
-let jToString (Jud(c, s) : 'a jud) : string = cToString c ^ " |> " ^ sToString s
+let jToString (Jud(c, s) : int jud) : string = cToString c ^ " |> " ^ (sToString s c)
 
 (* Well-typedeness *)
 let typeOfDecl (d : decl) : typ =
@@ -247,13 +251,13 @@ let derriveAndPrint (j : string jud) : string =
 let queryToString q =
   match q with
   | WellTyped(t) ->
-    "Well-typed: ? |> " ^ tToString(t) ^ " : ?"
+    "Well-typed: ? |> " ^ (tToString (string2intTerm t (Ctx[])) (Ctx([]))) ^ " : ?"
   | TypeAssignment(c, t) ->
-    let ty = (typeOf t  c) in
-    "Type assignment: " ^ cToString(c) ^ " |> " ^ tToString(t) ^ " : ?\n" ^
+    let ty = (typeOf t c) in
+    "Type assignment: " ^ cToString(c) ^ " |> " ^ (tToString (string2intTerm t c) c)  ^ " : ?\n" ^
     let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
   | TypeCheck(j) ->
-    "Type check: " ^ jToString j ^ "\n" ^
+    "Type check: " ^ jToString (string2intJ j) ^ "\n" ^
     derriveAndPrint(j)
   | TermSearch(c, t) ->
     "Term search: " ^ cToString(c) ^ " |> ? : " ^ tyToString(t)
