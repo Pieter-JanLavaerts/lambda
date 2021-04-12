@@ -14,10 +14,10 @@
 %%
 
 main:
-  | QUESTION; DERRIVES; t = term; COLON; QUESTION { WellTyped(t) }
-  | c = context; DERRIVES; t = term; COLON; QUESTION { TypeAssignment(c, t) }
+  | QUESTION; DERRIVES; t = term; COLON; QUESTION; EOL { WellTyped(t) }
+  | c = context; DERRIVES; t = term; COLON; QUESTION; EOL { TypeAssignment(c, t) }
   | j = judgement; EOL { TypeCheck(j) }
-  | c = context; DERRIVES; QUESTION; COLON; t = typ { TermSearch(c, t) }
+  | c = context; DERRIVES; QUESTION; COLON; t = typ; EOL { TermSearch(c, t) }
 
 judgement:
   | c = context; DERRIVES; s = statement { Jud(c, s) }

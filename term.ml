@@ -55,9 +55,6 @@ let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
   | [] -> raise (Failure "Variable not in context")
   | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
 
-let ctxfind (x : int) (Ctx(l): ctx) : decl =
-  List.nth l x
-
 let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
   match term with
   | TVar(s) -> TVar(ctxindex s ctx)
@@ -140,6 +137,11 @@ let rec cToString (Ctx(l) : ctx) =
     let dn = (newDecl d (Ctx(l))) in
     dToString dn ^ ", " ^ cToString (Ctx(t))
 
+let ctxfind (x : int) (Ctx(l): ctx) : decl =
+  try List.nth l x with
+    Failure _ ->
+    raise (Failure ("ctxfind " ^ string_of_int x ^ " [" ^ (cToString (Ctx(l))) ^ "]"))
+
 let rec tToString (t : int term) (c : ctx) : string =
   match t with
   | TVar(v) ->
@@ -214,10 +216,10 @@ let rec derrive (j : 'a jud) : derrivation =
     | TApp(t1, t2) ->
       let t1y = (typeOf t1 c) in
       let t2y = (typeOf t2 c) in
-      if (yFunFrom t1y) = t2y then
+      if (yFunFrom t1y) = t2y && (yFunTo t1y) = ty then
         DApp(j, (derrive (Jud(c, Stm(t1, t1y)))), (derrive (Jud(c, Stm(t2, t2y)))))
       else
-        raise (DerrivationFail(j, "Type error in application"))
+        raise (DerrivationFail(j, "Type error in application\n"))
 
 let rec derrivationToString (d : derrivation) (linum : int) : string * int =
   let s, l =
@@ -241,6 +243,55 @@ let derriveAndPrint (j : int jud) : string =
   try let s, _ = derrivationToString (derrive j) 0 in s with
     DerrivationFail(j, s) ->
     "Failed derriving: " ^ jToString j ^ "\n" ^ s
+
+(* TermSearch *)
+let rec rightMost (ty : typ) : string =
+  match ty with
+  | YVar(r) -> r
+  | YFun(_, r) -> (rightMost r)
+
+let rec findTyp (ty : string) ((Ctx(l)): ctx) : int list =
+  match l with
+  | Decl(_, dy) :: tail ->
+    let r = if (rightMost dy) = ty then [0] else [] in
+    List.append r (List.map (fun x -> x + 1) (findTyp ty (Ctx(tail))))
+  | [] -> []
+
+let isYVar (i : int) (d : decl list) : bool =
+  match List.nth d i with
+  | Decl(_, YVar(_)) -> true
+  | _ -> false
+
+let rec print_list = function
+  | [] -> ()
+  | e::l -> print_int e; print_string " "; print_list l
+
+let rec searchTerm (Ctx(l) : ctx) (t: typ) : int term =
+  let c = Ctx(l) in
+  match t with
+  | YVar(yv) ->
+    let contextDecls = (findTyp yv c) in
+    (match List.filter (fun x -> (isYVar x l)) contextDecls with
+     | i :: _ -> TVar(i)
+     | [] ->
+       let rec f lst : int term =
+         (match lst with
+          | i :: tail ->
+            let nth = List.nth l i in
+            (match nth with
+              | Decl(_, YFun(left, _)) ->
+                (try TApp(TVar(i), (searchTerm c left)) with
+                   Failure _ -> f tail)
+              | _ -> raise (Failure "Search term failed"))
+          | _ -> raise (Failure "Search term failed"))
+       in f contextDecls)
+  | YFun(l, r) -> TAbs(Decl("x", l), (searchTerm (ctxCons (Decl("x",l)) c) r))
+
+let d1 = Decl("x", YFun(YVar("a"), YVar("b")))
+let d2 = Decl("y", YVar("a"))
+let dl = [d1; d2]
+let testctx = Ctx(dl)
+let testsearch() = searchTerm testctx (YVar("b"))
 
 (* query to string *)
 type stringquery = string query
@@ -284,5 +335,8 @@ let queryToString sq =
   | TypeCheck(j) ->
     "Type check: " ^ jToString (string2intJud j) ^ "\n" ^
     derriveAndPrint(string2intJud j)
-  | TermSearch(c, t) ->
-    "Term search: " ^ cToString(c) ^ " |- ? : " ^ tyToString(t)
+  | TermSearch(c, ty) ->
+    "Term search: " ^ cToString(c) ^ " |- ? : " ^ tyToString(ty) ^ "\n" ^
+    let t = (searchTerm c ty) in
+    let j = Jud(c, Stm(t, ty)) in
+    derriveAndPrint(j)
