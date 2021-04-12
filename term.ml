@@ -21,9 +21,22 @@ type decl = Decl of string * typ
 
 (* A Context is a list of declarations *)
 type ctx = Ctx of decl list
-let ctxCons d c =
-  match c with
-  | Ctx(l) -> Ctx(d :: l)
+
+let rec isNewDecl (Decl(v, vy) : decl) (Ctx(l) : ctx) : bool =
+  match l with
+  | [] -> true
+  | Decl(vh, _) :: t ->
+    if vh = v
+    then false
+    else (isNewDecl (Decl(v, vy)) (Ctx(t)))
+
+let rec newDecl (d : decl) (l : ctx) : decl =
+  if (isNewDecl d l)
+  then d
+  else match d with Decl(v, vy) -> (newDecl (Decl(v ^ "'", vy)) l)
+
+let ctxCons (d : decl) (Ctx(l) : ctx) : ctx =
+  Ctx((newDecl d (Ctx(l))) :: l)
 
 (* 
 parser constructs string terms
@@ -49,6 +62,38 @@ type query =
   | TypeAssignment of ctx * string term
   | TypeCheck of string jud
   | TermSearch of ctx * typ
+
+(* Assign DeBruijn indexes (str2int) *)
+let ctxlen (ctx : ctx) : int =
+  match ctx with
+  | Ctx(l) -> List.length l
+
+let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
+  match lst with
+  | [] -> raise (Failure "Variable not in context")
+  | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
+
+let ctxfind: type a. a -> a var -> ctx -> decl =
+  fun v vy ctx ->
+  match ctx with Ctx(lst) ->
+    let index : int =
+      (match vy with
+       | Int -> v 
+       | String -> ctxindex v ctx)
+    in
+    List.nth lst index
+
+let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
+  match term with
+  | TVar(s, _) -> TVar(ctxindex s ctx, Int)
+  | TAbs(d, t) -> TAbs((newDecl d ctx), string2intTerm t (ctxCons d ctx))
+  | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
+
+let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
+  match stm with
+  | Stm(term, ty) -> Stm(string2intTerm term ctx, ty)
+
+let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
 
 (* AST to string *)
 let greek s =
@@ -121,39 +166,6 @@ let sToString (Stm(t, ty) : 'a stm) : string = tToString t ^ " : " ^ tyToString 
 
 let jToString (Jud(c, s) : 'a jud) : string = cToString c ^ " |> " ^ sToString s
 
-(* string2int *)
-let ctxlen (ctx : ctx) : int =
-  match ctx with
-  | Ctx(l) -> List.length l
-
-(* Assign DeBruijn indexes *)
-let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
-  match lst with
-  | [] -> raise (Failure "Variable not in context")
-  | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
-
-let ctxfind: type a. a -> a var -> ctx -> decl =
-  fun v vy ctx ->
-  match ctx with Ctx(lst) ->
-    let index : int =
-      (match vy with
-       | Int -> v 
-       | String -> ctxindex v ctx)
-    in
-    List.nth lst index
-
-let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
-  match term with
-  | TVar(s, _) -> TVar(ctxindex s ctx, Int)
-  | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
-  | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
-
-let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
-  match stm with
-  | Stm(term, ty) -> Stm(string2intTerm term ctx, ty)
-
-let string2intJ (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
-
 (* Well-typedeness *)
 let typeOfDecl (d : decl) : typ =
   match d with Decl(_, ty) -> ty
@@ -184,11 +196,11 @@ let rec typeOf (term : 'a term) (c : ctx) : typ =
 
 (* Type checking *)
 type derrivation = 
-  | DVar of string jud
-  | DAbs of string jud * derrivation
-  | DApp of string jud * derrivation * derrivation
+  | DVar of int jud
+  | DAbs of int jud * derrivation
+  | DApp of int jud * derrivation * derrivation
 
-exception DerrivationFail of string jud * string
+exception DerrivationFail of int jud * string
 let rec derrive (j : 'a jud) : derrivation =
   match j with
   | Jud(c, Stm(t, ty)) ->
@@ -227,7 +239,7 @@ let rec derrivationToString (d : derrivation) =
     | DApp(j, d1, d2) -> derrivationToString(d1) ^ derrivationToString(d2) ^ jToString(j) ^ "\t (app) \n"
 
 let derriveAndPrint (j : string jud) : string =
-  try derrivationToString (derrive j) with
+  try derrivationToString (derrive (string2intJ j)) with
     DerrivationFail(j, s) ->
     "Failed derriving: " ^ jToString j ^ "\n" ^ s
 
