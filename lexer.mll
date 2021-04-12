@@ -31,7 +31,7 @@ and token = parse
     { EOL }
 | "lambda"
     { LAMBDA }
-| "|>"
+| "|-"
     { DERRIVES }
 | "->"
     { ARROW }
