@@ -245,53 +245,43 @@ let derriveAndPrint (j : int jud) : string =
     "Failed derriving: " ^ jToString j ^ "\n" ^ s
 
 (* TermSearch *)
-let rec rightMost (ty : typ) : string =
-  match ty with
-  | YVar(r) -> r
-  | YFun(_, r) -> (rightMost r)
 
-let rec findTyp (ty : string) ((Ctx(l)): ctx) : int list =
+let rec prodSearchNth (Ctx(l) : ctx) (ty : typ) : int =
   match l with
-  | Decl(_, dy) :: tail ->
-    let r = if (rightMost dy) = ty then [0] else [] in
-    List.append r (List.map (fun x -> x + 1) (findTyp ty (Ctx(tail))))
-  | [] -> []
+  | Decl(_, YFun(_, right)) :: _ when ty = right -> 0
+  | _ :: tail -> 1 + (prodSearchNth (Ctx(tail)) ty)
+  | [] -> raise (Failure "appSearch")
 
-let isYVar (i : int) (d : decl list) : bool =
-  match List.nth d i with
-  | Decl(_, YVar(_)) -> true
-  | _ -> false
 
-let rec print_list = function
-  | [] -> ()
-  | e::l -> print_int e; print_string " "; print_list l
+let rec replacenth (l : 'a list) (n : int) (elt : 'a) : 'a list =
+  match l with
+  | [] -> raise (Failure "replacenth")
+  | h :: t ->
+    if n = 0 then elt :: t
+    else h :: (replacenth t (n - 1) elt)
 
-let rec searchTerm (Ctx(l) : ctx) (t: typ) : int term =
-  let c = Ctx(l) in
-  match t with
-  | YVar(yv) ->
-    let contextDecls = (findTyp yv c) in
-    (match List.filter (fun x -> (isYVar x l)) contextDecls with
-     | i :: _ -> TVar(i)
-     | [] ->
-       let rec f lst : int term =
-         (match lst with
-          | i :: tail ->
-            let nth = List.nth l i in
-            (match nth with
-              | Decl(_, YFun(left, _)) ->
-                (try TApp(TVar(i), (searchTerm c left)) with
-                   Failure _ -> f tail)
-              | _ -> raise (Failure "Search term failed"))
-          | _ -> raise (Failure "Search term failed"))
-       in f contextDecls)
-  | YFun(l, r) -> TAbs(Decl("x", l), (searchTerm (ctxCons (Decl("x",l)) c) r))
+let rec varSearchNth (Ctx(l) : ctx) (ty : typ) : int =
+  match l with
+  | Decl(_, h) :: t -> if h = ty then 0 else (1 + (varSearchNth (Ctx(t)) ty))
+  | [] -> raise (Failure ("varSearch" ^ (cToString (Ctx(l)) ^ ", " ^ (tyToString ty))))
 
-let d1 = Decl("x", YFun(YVar("a"), YVar("b")))
-let d2 = Decl("y", YVar("a"))
-let dl = [d1; d2]
-let testctx = Ctx(dl)
-let testsearch() = searchTerm testctx (YVar("b"))
+let appSearch (Ctx(lst) : ctx) (ty : typ) : int term =
+  let c = Ctx(lst) in
+  let n = prodSearchNth c ty in
+  let d = List.nth lst n in
+  let Decl(ntv, nty) = d in
+  match nty with
+  | YFun(l, r) -> TApp(TVar(n), TVar((varSearchNth (Ctx(replacenth lst n (Decl(ntv, r)))) l)))
+  | _ -> raise (Failure "This wil never trigger")
+
+let rec searchTerm (c : ctx) (ty : typ) : int term =
+  try TVar(varSearchNth c ty) with
+    Failure f1 ->
+    (try (appSearch c ty) with
+       Failure f2 ->
+       (match ty with
+        | YFun(l, r) -> TAbs(Decl("x", l), (searchTerm (ctxCons (Decl("x", l)) c) r))
+        | YVar(_) -> raise (Failure ("searchTerm " ^ f1 ^ " " ^ f2))))
 
 (* query to string *)
 type stringquery = string query
