@@ -1,5 +1,4 @@
-# Simple type theory
+# Lambda 2
 
 ## TODO:
-1. Well-typedness using freevars
-1. Term-finding
+1. De Bruijn indexes for types
