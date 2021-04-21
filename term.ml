@@ -134,7 +134,7 @@ let rec cToString (Ctx(l) : ctx) =
   | [] -> ""
   | d :: [] -> dToString d
   | d :: t ->
-    let dn = (newDecl d (Ctx(l))) in
+    let dn = (newDecl d (Ctx(t))) in
     dToString dn ^ ", " ^ cToString (Ctx(t))
 
 let ctxfind (x : int) (Ctx(l): ctx) : decl =
@@ -251,7 +251,6 @@ let rec prodSearchNth (Ctx(l) : ctx) (ty : typ) : int =
   | Decl(_, YFun(_, right)) :: _ when ty = right -> 0
   | _ :: tail -> 1 + (prodSearchNth (Ctx(tail)) ty)
   | [] -> raise (Failure "appSearch")
-
 
 let rec replacenth (l : 'a list) (n : int) (elt : 'a) : 'a list =
   match l with
