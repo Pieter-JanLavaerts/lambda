@@ -15,9 +15,12 @@ q: a, y : a -> b |- (lambda z : a . (y z)) : a -> b
 type typ =
   | YVar of string
   | YFun of typ * typ
+  | YPi of string * typ
 
 (* A declaration is a variable name and a type *)
-type decl = Decl of string * typ
+type decl =
+  | VDecl of string * typ
+  | YDecl of string
 
 (* A Context is a list of declarations *)
 type ctx = Ctx of decl list
@@ -34,17 +37,16 @@ type 'a term =
   | TApp of 'a term * 'a term
 
 (* A statement is a term with a type *)
-type 'a stm = Stm of 'a term * typ
+type 'a stm =
+  | TStm of 'a term * typ
+  | YStm of typ
 
 (* A judgement is a statement with a context *)
 type 'a jud = Jud of ctx * 'a stm
+type stringjud = string jud
+let jToString (_ : stringjud) = "hey"
 
-type 'a query =
-  | WellTyped of 'a term
-  | TypeAssignment of ctx * 'a term
-  | TypeCheck of 'a jud
-  | TermSearch of ctx * typ
-
+(*
 (* Assign DeBruijn indexes (str2int) *)
 let ctxlen (ctx : ctx) : int =
   match ctx with
@@ -329,3 +331,4 @@ let queryToString sq =
     let t = (searchTerm c ty) in
     let j = Jud(c, Stm(t, ty)) in
     derriveAndPrint(j)
+*)

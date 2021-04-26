@@ -29,12 +29,16 @@ and token = parse
     { token lexbuf }
 | [ '\n' ]
     { EOL }
+| "pi"
+    { PI }
 | "lambda"
     { LAMBDA }
 | "|-"
     { DERRIVES }
 | "->"
     { ARROW }
+| ":" " "* "*"
+    { COLSTAR }
 | ":"
     { COLON }
 | [ '(' ]

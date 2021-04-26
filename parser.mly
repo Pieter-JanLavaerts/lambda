@@ -1,11 +1,11 @@
-%token LAMBDA LPAREN RPAREN
+%token PI LAMBDA LPAREN RPAREN
 %token <string> VAR
 %token DERRIVES
-%token ARROW COLON
+%token COLSTAR ARROW COLON
 %token DOT COMMA
 %token QUESTION EOL
 
-%start <Term.stringquery> main
+%start <Term.stringjud> main
 
 %right ARROW
 
@@ -14,16 +14,11 @@
 %%
 
 main:
-  | QUESTION; DERRIVES; t = term; COLON; QUESTION; EOL { WellTyped(t) }
-  | c = context; DERRIVES; t = term; COLON; QUESTION; EOL { TypeAssignment(c, t) }
-  | j = judgement; EOL { TypeCheck(j) }
-  | c = context; DERRIVES; QUESTION; COLON; t = typ; EOL { TermSearch(c, t) }
-
-judgement:
-  | c = context; DERRIVES; s = statement { Jud(c, s) }
+  | c = context; DERRIVES; s = statement; EOL { Jud(c, s) }
 
 statement:
-  | t = term; COLON; ty = typ { Stm(t, ty) }
+  | t = term; COLON; ty = typ { TStm(t, ty) }
+  | ty = typ; COLSTAR { YStm(ty) }
 
 term:
   | t = term2 { t }
@@ -52,9 +47,11 @@ context:
   | d = decl; c = context { ctxCons d c }
 
 decl:
-  | v = VAR; COLON; ty = typ { Decl(v, ty) }
+  | v = VAR; COLON; ty = typ { VDecl(v, ty) }
+  | v = VAR; COLSTAR { YDecl(v) }
 
 typ:
   | v = VAR { YVar(v) }
   | LPAREN; ty1 = typ; ARROW; ty2 = typ; RPAREN { YFun(ty1, ty2) }
   | ty1 = typ; ARROW; ty2 = typ { YFun(ty1, ty2) }
+  | LPAREN; PI; v = VAR; COLSTAR; DOT; ty = typ; RPAREN { YPi(v, ty) }
