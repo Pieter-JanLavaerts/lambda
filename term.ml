@@ -168,38 +168,53 @@ let sToString (s : int stm) (c : int ctx) =
 let jToString (Jud(c, s) : int jud) : string =
   cToString c ^ " |- " ^ sToString s c
 
-let stringjToString (j : string jud) : string =
-  jToString (string2intJud j)
-
-(*
 (* Well-typedeness *)
-let typeOfDecl (d : decl) : typ =
-  match d with Decl(_, ty) -> ty
+let typeOfDecl (d : int decl) (c : int ctx) : int typ =
+  match d with
+  | VDecl(_, ty) -> ty
+  | YDecl(n) -> YVar(ctxindex n c)
 
-let yFunFrom (t : typ) : typ =
+let yFunFrom (t : int typ) : int typ =
   match t with
   | YFun(f, _) -> f
   | _ ->
-    let msg = "Expected YFun but got " ^ (tyToString t) ^ "." in
+    let msg = "Expected YFun but got YVar or YPi." in
     raise (Failure msg)
 
-let yFunTo (t : typ) : typ =
+let yFunTo (t : int typ) : int typ =
   match t with
   | YFun(_, t) -> t
   | _ -> 
-  let msg = "Expected YFun but got " ^ (tyToString t) ^ "." in
+  let msg = "Expected YFun but got YVar or YPi." in
   raise (Failure msg)
 
-let rec typeOf (term : 'a term) (c : ctx) : typ =
-  match term with
-  | TVar(v) -> typeOfDecl(ctxfind v c)
-  | TAbs(d, t) -> YFun((typeOfDecl d), (typeOf t (ctxCons d c)))
+let rec typeOf (t : int term) (c : int ctx) : int typ =
+  match t with
+  | TVar(v) -> typeOfDecl (List.nth c v) c
+  | TAbs(d, t) -> YFun((typeOfDecl d c), (typeOf t (d :: c)))
   | TApp(t1, t2) ->
     let t1y = (typeOf t1 c) in
     let t2y = (typeOf t2 c) in
-    if (yFunFrom t1y) = t2y then (yFunTo t1y)
-    else raise (Failure "Type error in application")
+    (match t1y with
+     | YFun(_, _) ->
+       if (yFunFrom t1y) = t2y then (yFunTo t1y)
+       else raise (Failure "Type error in application")
+     | YPi(_, _) -> raise (Failure "typeOf pi application not implemented yet")
+     | YVar(_) -> raise (Failure "application or variable"))
 
+(* lambda ml interface *)
+let stringjToString (j : string jud) : string =
+  let j = string2intJud j in
+  let s = match j with Jud(c, s) ->
+    (match s with
+     | TStm(t, _) ->
+       let ty = typeOf t c in
+       "typeOf result: " ^ tyToString ty c ^ "\n"
+     | YStm(_) -> "")
+  in
+  s ^ jToString j
+
+(*
 (* Type checking *)
 type derrivation = 
   | DVar of int jud
@@ -260,90 +275,4 @@ let derriveAndPrint (j : int jud) : string =
   try let s, _ = derrivationToString (derrive j) 0 in s with
     DerrivationFail(j, s) ->
     "Failed derriving: " ^ jToString j ^ "\n" ^ s
-
-(* TermSearch *)
-
-let rec prodSearchNth (Ctx(l) : ctx) (ty : typ) : int =
-  match l with
-  | Decl(_, YFun(_, right)) :: _ when ty = right -> 0
-  | _ :: tail -> 1 + (prodSearchNth (Ctx(tail)) ty)
-  | [] -> raise (Failure "appSearch")
-
-let rec replacenth (l : 'a list) (n : int) (elt : 'a) : 'a list =
-  match l with
-  | [] -> raise (Failure "replacenth")
-  | h :: t ->
-    if n = 0 then elt :: t
-    else h :: (replacenth t (n - 1) elt)
-
-let rec varSearchNth (Ctx(l) : ctx) (ty : typ) : int =
-  match l with
-  | Decl(_, h) :: t -> if h = ty then 0 else (1 + (varSearchNth (Ctx(t)) ty))
-  | [] -> raise (Failure ("varSearch" ^ (cToString (Ctx(l)) ^ ", " ^ (tyToString ty))))
-
-let appSearch (Ctx(lst) : ctx) (ty : typ) : int term =
-  let c = Ctx(lst) in
-  let n = prodSearchNth c ty in
-  let d = List.nth lst n in
-  let Decl(ntv, nty) = d in
-  match nty with
-  | YFun(l, r) -> TApp(TVar(n), TVar((varSearchNth (Ctx(replacenth lst n (Decl(ntv, r)))) l)))
-  | _ -> raise (Failure "This wil never trigger")
-
-let rec searchTerm (c : ctx) (ty : typ) : int term =
-  try TVar(varSearchNth c ty) with
-    Failure f1 ->
-    (try (appSearch c ty) with
-       Failure f2 ->
-       (match ty with
-        | YFun(l, r) -> TAbs(Decl("x", l), (searchTerm (ctxCons (Decl("x", l)) c) r))
-        | YVar(_) -> raise (Failure ("searchTerm " ^ f1 ^ " " ^ f2))))
-
-(* query to string *)
-type stringquery = string query
-
-let string2intQuery (q : string query) : int query =
-  match q with
-  | WellTyped(t) -> WellTyped(string2intTerm t (Ctx([])))
-  | TypeAssignment(c, t) -> TypeAssignment(c, string2intTerm t c)
-  | TypeCheck(j) -> TypeCheck(string2intJud j)
-  | TermSearch(c, ty) -> TermSearch(c, ty)
-
-let rec numFreeVars t =
-  match t with
-  | TVar(_) -> 1
-  | TAbs(_, t2) -> (numFreeVars t2) - 1
-  | TApp(t1, t2) -> (numFreeVars t1) + (numFreeVars t2)
-
-let queryToString sq =
-  match sq with
-  | WellTyped(ts) ->
-    if numFreeVars ts = 0 then
-      let c = Ctx([]) in
-      let t = string2intTerm ts c in
-      let ty = (typeOf t c) in
-      let j = Jud(c, Stm(t, ty)) in
-      "Well typed:  ? |- " ^ (tToString t c)  ^ " : ?\n" ^
-      derriveAndPrint(j)
-    else
-      string_of_int (numFreeVars ts) ^ " free variable(s).\n"
-  | TypeAssignment(Ctx(l), ts) ->
-    let fv = numFreeVars ts in
-    let len = List.length l in
-    if fv > len then
-      "More free variables (" ^ string_of_int fv ^ ") than size of context (" ^ string_of_int len ^ "). \n"
-    else
-      let c = Ctx(l) in
-      let t = string2intTerm ts c in
-      let ty = (typeOf t c) in
-      "Type assignment: " ^ cToString(c) ^ " |- " ^ (tToString t c)  ^ " : ?\n" ^
-      let j = Jud(c, Stm(t, ty)) in derriveAndPrint(j)
-  | TypeCheck(j) ->
-    "Type check: " ^ jToString (string2intJud j) ^ "\n" ^
-    derriveAndPrint(string2intJud j)
-  | TermSearch(c, ty) ->
-    "Term search: " ^ cToString(c) ^ " |- ? : " ^ tyToString(ty) ^ "\n" ^
-    let t = (searchTerm c ty) in
-    let j = Jud(c, Stm(t, ty)) in
-    derriveAndPrint(j)
 *)

@@ -64,4 +64,4 @@ pi:
 
 innerpi:
   | v = VAR; COLSTAR; DOT; ty = typ { YPi(v, ty) }
-  | v = VAR; COLSTAR; COMMA?; p = innerpi { YPi(v, p) }
+  | v = VAR; COLSTAR?; COMMA?; p = innerpi { YPi(v, p) }
