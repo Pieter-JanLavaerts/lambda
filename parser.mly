@@ -41,10 +41,10 @@ innerlambda:
   | d = decl; COMMA?; l = innerlambda { TAbs(d, l) }
 
 context:
-  | { Ctx([]) }
-  | d = decl { ctxCons d (Ctx([])) }
-  | d = decl; COMMA; c = context { ctxCons d c }
-  | d = decl; c = context { ctxCons d c }
+  | { [] }
+  | d = decl { [d] }
+  | d = decl; COMMA; c = context { d :: c }
+  | d = decl; c = context { d :: c }
 
 decl:
   | v = VAR; COLON; ty = typ { VDecl(v, ty) }

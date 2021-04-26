@@ -12,20 +12,18 @@ q: a, y : a -> b |- (lambda z : a . (y z)) : a -> b
 
 (* AST definitions *)
 (* A type a type variable or a pair of types *)
-type typ =
-  | YVar of string
-  | YFun of typ * typ
-  | YPi of string * typ
+type 'a typ =
+  | YVar of 'a
+  | YFun of 'a typ * 'a typ
+  | YPi of string * 'a typ
 
 (* A declaration is a variable name and a type *)
-type decl =
-  | VDecl of string * typ
+type 'a decl =
+  | VDecl of string * 'a typ
   | YDecl of string
 
 (* A Context is a list of declarations *)
-type ctx = Ctx of decl list
-
-let ctxCons (d : decl) (Ctx(l) : ctx) : ctx = Ctx(d :: l)
+type 'a ctx = 'a decl list
 
 (* 
 parser constructs string terms
@@ -33,43 +31,58 @@ converted to int terms (DeBruijn) for evaluation
 *)
 type 'a term =
   | TVar of 'a
-  | TAbs of decl * 'a term
+  | TAbs of 'a decl * 'a term
   | TApp of 'a term * 'a term
 
 (* A statement is a term with a type *)
 type 'a stm =
-  | TStm of 'a term * typ
-  | YStm of typ
+  | TStm of 'a term * 'a typ
+  | YStm of 'a typ
 
 (* A judgement is a statement with a context *)
-type 'a jud = Jud of ctx * 'a stm
+type 'a jud = Jud of 'a ctx * 'a stm
 type stringjud = string jud
-let jToString (_ : stringjud) = "hey"
 
-(*
 (* Assign DeBruijn indexes (str2int) *)
-let ctxlen (ctx : ctx) : int =
-  match ctx with
-  | Ctx(l) -> List.length l
+let rec ctxindex (x : string) (c : 'a ctx) : int =
+  match c with
+  | VDecl(v, _) :: _ when x = v -> 0
+  | YDecl(v) :: _ when x = v -> 0
+  | _ :: t -> 1 + ctxindex x t
+  | [] -> raise (Failure ("ctxindex " ^ x))
 
-let rec ctxindex (x : string) (Ctx(lst) : ctx) : int =
-  match lst with
-  | [] -> raise (Failure "Variable not in context")
-  | Decl(h, _) :: t -> if x = h then 0 else 1 + ctxindex x (Ctx(t))
+let rec string2intTyp (t : string typ) (c : string ctx) : int typ =
+  match t with
+  | YVar(v) -> YVar(ctxindex v c)
+  | YFun(t1, t2) -> YFun(string2intTyp t1 c, string2intTyp t2 c)
+  | YPi(v, t) -> YPi(v, string2intTyp t ((YDecl(v)) :: c))
 
-let rec string2intTerm (term : string term) (ctx : ctx) : (int term) =
+let string2intDecl (d : string decl) (c : string ctx) : int decl =
+  match d with
+  | VDecl(v, t) -> VDecl(v, string2intTyp t c)
+  | YDecl(v) -> YDecl(v)
+
+let rec string2intTerm (term : string term) (c : string ctx) : (int term) =
   match term with
-  | TVar(s) -> TVar(ctxindex s ctx)
-  | TAbs(d, t) -> TAbs(d, string2intTerm t (ctxCons d ctx))
-  | TApp(t1, t2) -> TApp((string2intTerm t1 ctx), (string2intTerm t2 ctx))
+  | TVar(s) -> TVar(ctxindex s c)
+  | TAbs(d, t) -> TAbs(string2intDecl d c, string2intTerm t (d :: c))
+  | TApp(t1, t2) -> TApp((string2intTerm t1 c), (string2intTerm t2 c))
 
-let string2intStm (stm : string stm) (ctx : ctx) : (int stm) =
+let string2intStm (stm : string stm) (c : string ctx) : (int stm) =
   match stm with
-  | Stm(term, ty) -> Stm(string2intTerm term ctx, ty)
+  | TStm(term, ty) -> TStm(string2intTerm term c, string2intTyp ty c)
+  | YStm(ty) -> YStm(string2intTyp ty c)
 
-let string2intJud (Jud(c, s) : string jud) : int jud = Jud(c, string2intStm s c) 
+let rec string2intCtxTop (c : string ctx) (top : string ctx) =
+  match c with
+  | h :: t -> string2intDecl h top :: string2intCtxTop t top
+  | [] -> []
 
-(* AST to string *)
+let string2intCtx (c : string ctx) = string2intCtxTop c c
+
+let string2intJud (Jud(c, s) : string jud) : int jud = Jud(string2intCtx c, string2intStm s c) 
+
+(* To String *)
 let greek s =
   match s with
   | "a" -> "α"
@@ -95,7 +108,6 @@ let greek s =
   | "x" -> "ξ"
   | "X" -> "Ξ"
   | "p" -> "π"
-  | "P" -> "Π"
   | "r" -> "ρ"
   | "s" -> "σ"
   | "S" -> "Σ"
@@ -111,52 +123,48 @@ let greek s =
   | "W" -> "Ω"
   | _ -> s
 
-let rec tyToString(t : typ) : string =
+let varOfDecl (d : 'a decl) : string =
+  match d with
+  | VDecl(v, _) -> v
+  | YDecl(v) -> v
+
+let rec tyToString (ty : int typ) (c : int ctx) : string =
+  match ty with
+  | YVar(v) -> varOfDecl (List.nth c v)
+  | YFun(t1, t2) -> tyToString t1 c ^ " -> " ^ tyToString t2 c
+  | YPi(v, t) -> "(Π " ^ v ^ " : * . " ^ tyToString t (YDecl(v) :: c) ^ ")"
+
+let dToString (d : int decl) (c : int ctx) : string =
+  match d with
+  | VDecl(v, ty) -> v ^ " : " ^ tyToString ty c
+  | YDecl(v) -> v ^ " : *"
+
+let rec tToString (t : int term) (c : int ctx) : string =
   match t with
-  | YVar(ty) -> greek ty
-  | YFun(ty1, ty2) -> "(" ^ tyToString(ty1) ^ " -> " ^ tyToString(ty2) ^ ")"
+  | TVar(v) -> varOfDecl (List.nth c v)
+  | TAbs(d, t) -> "(λ " ^ dToString d c ^ " . " ^ tToString t c ^ ")"
+  | TApp(t1, t2) -> "(" ^ tToString t1 c ^ " " ^ tToString t2 c ^ ")"
 
-let dToString (Decl(v, ty) : decl) = v ^ " : " ^ tyToString(ty)
-
-let rec isNewDecl (Decl(v, vy) : decl) (Ctx(l) : ctx) : bool =
-  match l with
-  | [] -> true
-  | Decl(vh, _) :: t ->
-    if vh = v
-    then false
-    else (isNewDecl (Decl(v, vy)) (Ctx(t)))
-
-let rec newDecl (d : decl) (l : ctx) : decl =
-  if (isNewDecl d l)
-  then d
-  else match d with Decl(v, vy) -> (newDecl (Decl(v ^ "'", vy)) l)
-
-let rec cToString (Ctx(l) : ctx) =
-  match l with
+let rec cToStringTop (c : int ctx) (top : int ctx) : string =
+  match c with
+  | d :: [] -> dToString d top
+  | d :: t -> dToString d top ^ ", " ^ cToStringTop t top
   | [] -> ""
-  | d :: [] -> dToString d
-  | d :: t ->
-    let dn = (newDecl d (Ctx(t))) in
-    dToString dn ^ ", " ^ cToString (Ctx(t))
 
-let ctxfind (x : int) (Ctx(l): ctx) : decl =
-  try List.nth l x with
-    Failure _ ->
-    raise (Failure ("ctxfind " ^ string_of_int x ^ " [" ^ (cToString (Ctx(l))) ^ "]"))
+let cToString (c : int ctx) : string = cToStringTop c c
+    
+let sToString (s : int stm) (c : int ctx) =
+  match s with
+  | TStm(t, ty) -> tToString t c ^ " : " ^ tyToString ty c
+  | YStm(ty) -> tyToString ty c
 
-let rec tToString (t : int term) (c : ctx) : string =
-  match t with
-  | TVar(v) ->
-    (match (ctxfind v c) with Decl(v, _) -> v)
-  | TAbs(d, t) ->
-    let Decl(v, vy) = (newDecl d c) in
-    "(λ " ^ v ^ " : " ^ (tyToString vy) ^ " . " ^ (tToString t (ctxCons (Decl(v, vy)) c)) ^ ")"
-  | TApp(t1, t2) -> "(" ^ (tToString t1 c) ^ " " ^ (tToString t2 c) ^ ")"
+let jToString (Jud(c, s) : int jud) : string =
+  cToString c ^ " |- " ^ sToString s c
 
-let sToString (Stm(t, ty) : int stm) (c : ctx) : string = tToString t c ^ " : " ^ tyToString ty
+let stringjToString (j : string jud) : string =
+  jToString (string2intJud j)
 
-let jToString (Jud(c, s) : int jud) : string = cToString c ^ " |- " ^ (sToString s c)
-
+(*
 (* Well-typedeness *)
 let typeOfDecl (d : decl) : typ =
   match d with Decl(_, ty) -> ty
