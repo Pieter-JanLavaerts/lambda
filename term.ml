@@ -55,7 +55,7 @@ let rec string2intTyp (t : string typ) (c : string ctx) : int typ =
   match t with
   | YVar(v) -> YVar(ctxindex v c)
   | YFun(t1, t2) -> YFun(string2intTyp t1 c, string2intTyp t2 c)
-  | YPi(v, t) -> YPi(v, string2intTyp t ((YDecl(v)) :: c))
+  | YPi(v, t) -> YPi(v, string2intTyp t (YDecl(v) :: c))
 
 let string2intDecl (d : string decl) (c : string ctx) : int decl =
   match d with
@@ -65,7 +65,7 @@ let string2intDecl (d : string decl) (c : string ctx) : int decl =
 let rec string2intTerm (term : string term) (c : string ctx) : (int term) =
   match term with
   | TVar(s) -> TVar(ctxindex s c)
-  | TAbs(d, t) -> TAbs(string2intDecl d c, string2intTerm t (d :: c))
+  | TAbs(d, t) -> TAbs(string2intDecl d c, string2intTerm t (List.append c [d]))
   | TApp(t1, t2) -> TApp((string2intTerm t1 c), (string2intTerm t2 c))
 
 let string2intStm (stm : string stm) (c : string ctx) : (int stm) =
@@ -123,6 +123,13 @@ let greek s =
   | "W" -> "Ω"
   | _ -> s
 
+let rec indexToName (i : int) (c : int ctx) : string =
+  match c with
+  | VDecl(v, _) :: _ when i = 0 -> v
+  | YDecl(v) :: _ when i = 0 -> greek v
+  | _ :: t -> indexToName (i - 1) t
+  | [] -> raise (Failure "indexToName")
+
 let varOfDecl (d : 'a decl) : string =
   match d with
   | VDecl(v, _) -> v
@@ -130,19 +137,19 @@ let varOfDecl (d : 'a decl) : string =
 
 let rec tyToString (ty : int typ) (c : int ctx) : string =
   match ty with
-  | YVar(v) -> varOfDecl (List.nth c v)
+  | YVar(v) -> indexToName v c
   | YFun(t1, t2) -> tyToString t1 c ^ " -> " ^ tyToString t2 c
-  | YPi(v, t) -> "(Π " ^ v ^ " : * . " ^ tyToString t (YDecl(v) :: c) ^ ")"
+  | YPi(v, t) -> "(Π " ^ greek(v) ^ " : * . " ^ tyToString t (YDecl(v) :: c) ^ ")"
 
 let dToString (d : int decl) (c : int ctx) : string =
   match d with
   | VDecl(v, ty) -> v ^ " : " ^ tyToString ty c
-  | YDecl(v) -> v ^ " : *"
+  | YDecl(v) -> greek(v) ^ " : *"
 
 let rec tToString (t : int term) (c : int ctx) : string =
   match t with
-  | TVar(v) -> varOfDecl (List.nth c v)
-  | TAbs(d, t) -> "(λ " ^ dToString d c ^ " . " ^ tToString t c ^ ")"
+  | TVar(v) -> indexToName v c
+  | TAbs(d, t) -> "(λ " ^ dToString d c ^ " . " ^ tToString t (List.append c [d]) ^ ")"
   | TApp(t1, t2) -> "(" ^ tToString t1 c ^ " " ^ tToString t2 c ^ ")"
 
 let rec cToStringTop (c : int ctx) (top : int ctx) : string =
@@ -156,7 +163,7 @@ let cToString (c : int ctx) : string = cToStringTop c c
 let sToString (s : int stm) (c : int ctx) =
   match s with
   | TStm(t, ty) -> tToString t c ^ " : " ^ tyToString ty c
-  | YStm(ty) -> tyToString ty c
+  | YStm(ty) -> tyToString ty c ^ " : *"
 
 let jToString (Jud(c, s) : int jud) : string =
   cToString c ^ " |- " ^ sToString s c
