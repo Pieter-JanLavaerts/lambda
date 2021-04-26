@@ -51,7 +51,17 @@ decl:
   | v = VAR; COLSTAR { YDecl(v) }
 
 typ:
+  | LPAREN; t = typ1; RPAREN { t }
+  | t = typ1 { t }
+
+typ1:
   | v = VAR { YVar(v) }
-  | LPAREN; ty1 = typ; ARROW; ty2 = typ; RPAREN { YFun(ty1, ty2) }
   | ty1 = typ; ARROW; ty2 = typ { YFun(ty1, ty2) }
-  | LPAREN; PI; v = VAR; COLSTAR; DOT; ty = typ; RPAREN { YPi(v, ty) }
+  | p = pi { p }
+
+pi:
+  | PI; p = innerpi { p }
+
+innerpi:
+  | v = VAR; COLSTAR; DOT; ty = typ { YPi(v, ty) }
+  | v = VAR; COLSTAR; COMMA?; p = innerpi { YPi(v, p) }
